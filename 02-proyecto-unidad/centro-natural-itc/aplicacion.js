@@ -64,7 +64,9 @@ function seleccionar(indice = indiceActivo) {
 
 function dibujarEtiqueta(x, y, texto, color) {
   contexto.save();
-  contexto.translate(lienzo.width - x, y);
+  // El vídeo y el canvas ya se muestran como espejo con CSS.
+  // No invertimos X otra vez: así el marcador queda sobre la mano real.
+  contexto.translate(x, y);
   contexto.strokeStyle = color;
   contexto.lineWidth = 5;
   contexto.beginPath();
