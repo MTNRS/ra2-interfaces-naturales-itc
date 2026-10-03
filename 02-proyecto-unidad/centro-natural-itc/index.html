@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centro natural ITC</title>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="marca">integra tech consulting · prototipo académico</p>
+      <h1>Centro natural de incidencias</h1>
+      <p>Consulta un panel sencillo sin ratón: habla, señala o desplázate.</p>
+    </div>
+    <div class="acciones">
+      <button id="botonCamara">Iniciar cámara</button>
+      <button id="botonVoz" disabled>Activar voz</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="visor" aria-label="Cámara y realidad aumentada">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="lienzo"></canvas>
+      <p id="estadoCamara" class="estado">Cámara apagada.</p>
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <div class="instrucciones">
+        <h2>Interacción natural</h2>
+        <ul>
+          <li><strong>Voz:</strong> siguiente, anterior, seleccionar, ayuda o parar.</li>
+          <li><strong>Índice levantado:</strong> selecciona la incidencia activa.</li>
+          <li><strong>Hombros:</strong> mueve el cuerpo a izquierda o derecha para navegar.</li>
+        </ul>
+        <p id="mensaje" class="mensaje">Pulsa «Iniciar cámara» para comenzar.</p>
+      </div>
+
+      <h2>Incidencias ficticias</h2>
+      <div id="incidencias" class="tarjetas"></div>
+    </section>
+  </main>
+
+  <template id="plantillaTarjeta">
+    <article class="tarjeta">
+      <p class="prioridad"></p>
+      <h3></h3>
+      <p class="detalle"></p>
+      <button>Marcar como revisada</button>
+    </article>
+  </template>
+
+  <script type="module" src="aplicacion.js"></script>
+</body>
+</html>
