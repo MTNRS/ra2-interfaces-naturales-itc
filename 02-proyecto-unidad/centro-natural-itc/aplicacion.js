@@ -1,9 +1,5 @@
-import {
-  FilesetResolver,
-  HandLandmarker,
-  PoseLandmarker,
-  FaceDetector
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+// Carga diferida: un fallo de red de los modelos no bloquea el panel ni la voz.
+import {indiceLevantado, desplazamientoHombros, reconocerOrden} from './gestos.js';
 
 const video = document.querySelector("#video");
 const lienzo = document.querySelector("#lienzo");
@@ -27,8 +23,13 @@ let escuchando = false;
 let manoDetector;
 let poseDetector;
 let caraDetector;
-let ultimoGesto = 0;
+let ultimoGestoMano = 0;
+let ultimoGestoPose = 0;
 let referenciaHombros = null;
+let reconocimientoActivo = null;
+let ultimoFotograma = -1;
+let urlMuestra = null;
+const medidas = {fotogramas:0, manos:0, poses:0, caras:0, acciones:0, gestosMano:0, gestosCuerpo:0};
 
 function escribir(texto) {
   mensaje.textContent = texto;
@@ -50,12 +51,14 @@ function pintarIncidencias() {
 }
 
 function cambiar(direccion) {
+  medidas.acciones++;
   indiceActivo = (indiceActivo + direccion + incidencias.length) % incidencias.length;
   pintarIncidencias();
   escribir("Incidencia activa: " + incidencias[indiceActivo].titulo + ".");
 }
 
 function seleccionar(indice = indiceActivo) {
+  medidas.acciones++;
   incidencias[indice].revisada = true;
   indiceActivo = indice;
   pintarIncidencias();
@@ -66,7 +69,7 @@ function dibujarEtiqueta(x, y, texto, color) {
   contexto.save();
   // El vídeo y el canvas ya se muestran como espejo con CSS.
   // No invertimos X otra vez: así el marcador queda sobre la mano real.
-  contexto.translate(x, y);
+  contexto.translate(lienzo.width - x, y);
   contexto.strokeStyle = color;
   contexto.lineWidth = 5;
   contexto.beginPath();
@@ -80,32 +83,30 @@ function dibujarEtiqueta(x, y, texto, color) {
   contexto.restore();
 }
 
-function indiceLevantado(puntos) {
-  const punta = puntos[8];
-  const articulacion = puntos[6];
-  const palma = puntos[0];
-  return punta.y < articulacion.y && punta.y < palma.y - 0.08;
-}
-
 function procesarMano(resultado) {
   if (!resultado.landmarks.length) return;
+  medidas.manos++;
   const puntos = resultado.landmarks[0];
   const punta = puntos[8];
   dibujarEtiqueta(punta.x * lienzo.width, punta.y * lienzo.height, "Punto ITC", "#31f3c5");
-  if (indiceLevantado(puntos) && performance.now() - ultimoGesto > 1800) {
-    ultimoGesto = performance.now();
+  if (indiceLevantado(puntos) && performance.now() - ultimoGestoMano > 1800) {
+    ultimoGestoMano = performance.now();
+    medidas.gestosMano++;
     seleccionar();
   }
 }
 
 function procesarPose(resultado) {
   if (!resultado.landmarks.length) return;
+  medidas.poses++;
   const puntos = resultado.landmarks[0];
-  const centro = (puntos[11].x + puntos[12].x) / 2;
+  const calculo = desplazamientoHombros(puntos, referenciaHombros);
+  if (!calculo) return;
+  const {centro, desplazamiento} = calculo;
   if (referenciaHombros === null) referenciaHombros = centro;
-  const desplazamiento = centro - referenciaHombros;
-  if (Math.abs(desplazamiento) > 0.16 && performance.now() - ultimoGesto > 1600) {
-    ultimoGesto = performance.now();
+  if (Math.abs(desplazamiento) > 0.16 && performance.now() - ultimoGestoPose > 1600) {
+    ultimoGestoPose = performance.now();
+    medidas.gestosCuerpo++;
     cambiar(desplazamiento > 0 ? -1 : 1);
     referenciaHombros = centro;
   }
@@ -113,6 +114,7 @@ function procesarPose(resultado) {
 
 function procesarCara(resultado) {
   if (!resultado.detections.length) return;
+  medidas.caras++;
   const caja = resultado.detections[0].boundingBox;
   const x = caja.originX + caja.width / 2;
   const y = caja.originY - 8;
@@ -120,6 +122,8 @@ function procesarCara(resultado) {
 }
 
 async function cargarDetectores() {
+  if (manoDetector && poseDetector && caraDetector) return;
+  const {FilesetResolver, HandLandmarker, PoseLandmarker, FaceDetector} = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
   );
@@ -128,12 +132,12 @@ async function cargarDetectores() {
     runningMode: "VIDEO", numHands: 1
   });
   poseDetector = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/lite/float16/latest/pose_landmarker_lite.task" },
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task" },
     runningMode: "VIDEO", numPoses: 1
   });
   caraDetector = await FaceDetector.createFromOptions(vision, {
     baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite" },
-    runningMode: "VIDEO"
+    runningMode: "VIDEO", minDetectionConfidence: 0.85
   });
 }
 
@@ -142,17 +146,21 @@ function bucle() {
   lienzo.width = video.videoWidth;
   lienzo.height = video.videoHeight;
   contexto.clearRect(0, 0, lienzo.width, lienzo.height);
-  if (video.readyState >= 2) {
+  if (video.readyState >= 2 && video.currentTime !== ultimoFotograma) {
+    ultimoFotograma = video.currentTime;
+    medidas.fotogramas++;
     const ahora = performance.now();
     procesarMano(manoDetector.detectForVideo(video, ahora));
     procesarPose(poseDetector.detectForVideo(video, ahora));
     procesarCara(caraDetector.detectForVideo(video, ahora));
+    document.querySelector('#evidencia').textContent = `Inferencias reales: ${medidas.fotogramas} fotogramas · mano ${medidas.manos} · pose ${medidas.poses} · cara ${medidas.caras} · acciones ${medidas.acciones} (mano ${medidas.gestosMano}, cuerpo ${medidas.gestosCuerpo})`;
   }
   requestAnimationFrame(bucle);
 }
 
 async function iniciarCamara() {
   try {
+    detener();
     botonCamara.disabled = true;
     escribir("Cargando los detectores de cara, mano y pose...");
     const flujo = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -165,41 +173,113 @@ async function iniciarCamara() {
     escribir("Interfaz natural lista. La etiqueta sobre el dedo es realidad aumentada.");
     bucle();
   } catch (error) {
+    detener();
     botonCamara.disabled = false;
     escribir("No se pudo usar la cámara: " + error.message);
   }
 }
 
 function ejecutarOrden(texto) {
-  const orden = texto.toLowerCase();
-  if (orden.includes("siguiente")) cambiar(1);
-  else if (orden.includes("anterior")) cambiar(-1);
-  else if (orden.includes("seleccionar") || orden.includes("revisar")) seleccionar();
-  else if (orden.includes("ayuda")) escribir("Puedes decir siguiente, anterior, seleccionar, ayuda o parar.");
-  else if (orden.includes("parar")) { speechSynthesis.cancel(); escribir("Voz detenida."); }
+  const orden = reconocerOrden(texto);
+  if (orden === 'siguiente') cambiar(1);
+  else if (orden === 'anterior') cambiar(-1);
+  else if (orden === 'seleccionar' || orden === 'revisar') seleccionar();
+  else if (orden === 'ayuda') escribir("Puedes decir siguiente, anterior, seleccionar, ayuda o parar.");
+  else if (orden === 'parar') { reconocimientoActivo?.stop(); speechSynthesis.cancel(); escribir("Voz detenida."); }
   else escribir("Orden no reconocida: " + texto);
 }
 
-function iniciarVoz() {
+function iniciarVoz(pista = null) {
   const Reconocimiento = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Reconocimiento) { escribir("Este navegador no ofrece reconocimiento de voz."); return; }
   const reconocimiento = new Reconocimiento();
+  reconocimientoActivo = reconocimiento;
   reconocimiento.lang = "es-ES";
   reconocimiento.continuous = false;
   reconocimiento.onresult = function(evento) {
     const texto = evento.results[0][0].transcript;
     ejecutarOrden(texto);
+    document.querySelector('#evidencia').textContent = 'Transcripción real del reconocedor: ' + texto + '. ' + mensaje.textContent;
     const lectura = new SpeechSynthesisUtterance(mensaje.textContent);
     lectura.lang = "es-ES";
     speechSynthesis.speak(lectura);
   };
   reconocimiento.onend = function() { escuchando = false; botonVoz.textContent = "Activar voz"; };
-  reconocimiento.start();
+  reconocimiento.onerror = evento => escribir('Reconocimiento no completado: ' + evento.error + '. No se ha simulado una transcripción.');
+  if (pista) reconocimiento.start(pista);
+  else reconocimiento.start();
   escuchando = true;
   botonVoz.textContent = "Escuchando...";
   escribir("Di una orden.");
 }
 
+function detener() {
+  camaraActiva = false;
+  reconocimientoActivo?.abort();
+  video.srcObject?.getTracks().forEach(pista => pista.stop());
+  video.srcObject = null;
+  video.pause();
+  video.removeAttribute('src');
+  ultimoFotograma = -1;
+  referenciaHombros = null;
+  botonCamara.disabled = false;
+  estadoCamara.textContent = 'Sensores detenidos.';
+}
+
+async function probarMuestra() {
+  detener();
+  document.querySelector('#botonMuestra').disabled = true;
+  try {
+    escribir('Cargando MediaPipe para inferir sobre el vídeo de prueba...');
+    await cargarDetectores();
+    video.src = 'muestras/gestos-prueba.mp4';
+    video.loop = false;
+    await video.play();
+    camaraActiva = true;
+    estadoCamara.textContent = 'Muestra de prueba: imágenes animadas; inferencia real, sin cámara.';
+    escribir('Detectando mano, cuerpo y cara del archivo de vídeo.');
+    bucle();
+  } catch(error) {
+    detener();
+    escribir('No se pudo procesar la muestra: ' + error.message);
+  } finally { document.querySelector('#botonMuestra').disabled = false; }
+}
+
+document.querySelector('#botonMuestra').addEventListener('click', probarMuestra);
+document.querySelector('#botonDetener').addEventListener('click', detener);
+document.querySelector('#botonAudioLocal').addEventListener('click', async evento => {
+  evento.target.disabled = true;
+  escribir('Reconociendo el archivo WAV con el motor español local de Windows...');
+  try {
+    const respuesta = await fetch('/api/reconocer-muestra', {method:'POST'});
+    const resultado = await respuesta.json();
+    if (!respuesta.ok) throw new Error(resultado.error);
+    ejecutarOrden(resultado.texto);
+    document.querySelector('#evidencia').textContent = `Transcripción real local: ${resultado.texto} · confianza ${Number(resultado.confianza).toFixed(2)}. ${mensaje.textContent}`;
+  } catch(error) { escribir('Reconocimiento local pendiente: ' + error.message); }
+  finally { evento.target.disabled = false; }
+});
+document.querySelector('#botonAudio').addEventListener('click', async () => {
+  const audio = new Audio('muestras/orden-siguiente.wav');
+  try {
+    if (!audio.captureStream) throw new Error('El navegador no permite capturar pistas de audio.');
+    await new Promise((resolve,reject) => {audio.oncanplay=resolve;audio.onerror=reject;audio.load();});
+    const flujo = audio.captureStream();
+    await audio.play();
+    const pista = flujo.getAudioTracks()[0];
+    if (!pista) throw new Error('No se ha obtenido una pista de audio.');
+    iniciarVoz(pista);
+  } catch(error) { escribir('Audio de prueba no reconocido: ' + error.message + '. No se usa el micrófono como alternativa.'); }
+});
+video.addEventListener('ended', () => {camaraActiva=false;estadoCamara.textContent='Muestra terminada. Consulta los contadores de detección.';});
+window.addEventListener('pagehide', detener);
+
 botonCamara.addEventListener("click", iniciarCamara);
 botonVoz.addEventListener("click", function() { if (!escuchando) iniciarVoz(); });
 pintarIncidencias();
+
+
+
+
+
+if (new URLSearchParams(location.search).get('demo') === '1') document.body.classList.add('demo');

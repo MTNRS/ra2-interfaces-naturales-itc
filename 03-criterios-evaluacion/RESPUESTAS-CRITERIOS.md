@@ -24,3 +24,22 @@ Los tres detectores comparten una sola cámara. Esto evita abrir varios flujos d
 3. Levantar el índice y comprobar que la tarjeta activa queda revisada.
 4. Desplazar los hombros a ambos lados y comprobar el cambio de tarjeta.
 5. Activar la voz y probar las cinco órdenes documentadas.
+
+## Verificación actual y precedencias (26/10/2026)
+
+La auditoría y los resultados actuales prevalecen sobre la descripción inicial.
+La prueba autorizada utiliza archivos de vídeo y audio, no los dispositivos del usuario.
+
+- a: comparación y fuentes primarias en AUDITORIA-ITC.md; MediaPipe es ML preentrenado.
+- b: panel funcional con controles naturales y alternativas convencionales.
+- c: reconocimiento real local de WAV con Windows Speech es-ES: «siguiente»,
+  confianza 0,8359, cambio visible a Copia de seguridad. Web Speech devolvió network.
+- d: detector de pose sobre una fotografía desplazada en el vídeo de prueba;
+  mide el cambio de hombros y acciona navegación. No acredita gestos espontáneos.
+- e: inferencia de mano y cara sobre muestras públicas y selección por índice.
+- f: marcador 2D asociado a coordenadas detectadas; no se afirma WebXR ni SLAM.
+
+Cuatro pruebas de lógica superadas, separadas de la inferencia del modelo.
+La prueba inicial del vídeo detectó mano, pose y cara en 250 fotogramas,
+con siete acciones combinadas. Los contadores por origen se incorporan en la
+versión final para distinguir navegación corporal y selección con mano.

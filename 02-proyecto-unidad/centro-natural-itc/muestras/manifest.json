@@ -1,0 +1,27 @@
+[
+  {
+    "archivo": "gestos-prueba.mp4",
+    "bytes": 262770,
+    "sha256": "668d863474f70ceaadf9b307db139355f9cc55620a068a2cb352e072d3357dea"
+  },
+  {
+    "archivo": "orden-siguiente.wav",
+    "bytes": 63512,
+    "sha256": "82f58574735126d9273039d67aba377144b85af1693d15a90a0c486a3beb7110"
+  },
+  {
+    "archivo": "pointing_up.jpg",
+    "bytes": 74461,
+    "sha256": "ecf8ca2611d08fa25948a4fc10710af9120e88243a54da6356bacea17ff3e36e"
+  },
+  {
+    "archivo": "portrait.jpg",
+    "bytes": 176561,
+    "sha256": "a6f11efaa834706db23f275b6115058fa87fc7f14362681e6abe14e82749de3e"
+  },
+  {
+    "archivo": "pose.jpg",
+    "bytes": 44100,
+    "sha256": "c8a830ed683c0276d713dd5aeda28f415f10cd6291972084a40d0d8b934ed62b"
+  }
+]

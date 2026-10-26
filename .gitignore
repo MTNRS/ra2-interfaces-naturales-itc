@@ -6,3 +6,8 @@ node_modules/
 *.mp4
 *.png
 *.jpg
+__pycache__/
+!DEMO-RA2.mp4
+!DEMO-RA2.png
+!02-proyecto-unidad/centro-natural-itc/muestras/*.mp4
+!02-proyecto-unidad/centro-natural-itc/muestras/*.jpg
